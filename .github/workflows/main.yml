@@ -1,0 +1,96 @@
+name: HW_019_pipeline_to_AWS
+
+env:
+  EB_PACKAGE_S3_BUCKET_NAME: "homework-19-bucket"
+  EB_APPLICATION_NAME: "hw-019-app"
+  EB_ENVIRONMENT_NAME: "Hw019app-env"
+  DEPLOY_PACKAGE_NAME: "flask_app_019_${{ github.sha }}.zip"
+  AWS_REGION_NAME: "eu-central-1"
+
+
+on:
+  push:
+    branches:
+      -master
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Notes"
+ 
+
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.8"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: flake8 check
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+      - name: Run pytests
+        run: pytest main/test_functions.py
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [ test ]
+
+
+    steps:
+      - name: Git clone repo
+        uses: actions/checkout@v1
+
+      - name: Create ZIP package
+        run: zip -r ${{ env.DEPLOY_PACKAGE_NAME }} ./ -x *.git*
+
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.MY_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.MY_AWS_SECRET_KEY }}
+          aws-region: ${{ env.AWS_REGION_NAME }}
+
+
+      - name: Copy deployment package to S3 bucket
+        run: aws s3 cp ${{ env.DEPLOY_PACKAGE_NAME }} s3://${{ env.EB_PACKAGE_S3_BUCKET_NAME }}/
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [ build ]
+
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.MY_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.MY_AWS_SECRET_KEY }}
+          aws-region: ${{ env.AWS_REGION_NAME }}
+
+
+      - name: Create new ElasticBeanstalk app
+        run: |
+          aws elasticbeanstalk create-application-version \
+          --application-name ${{ env.EB_APPLICATION_NAME }} \
+          --source-bundle S3Bucket="${{ env.EB_PACKAGE_S3_BUCKET_NAME }}",S3Key="${{ env.DEPLOY_PACKAGE_NAME }}" \
+          --version-label "Ver-${{ github.sha }}" \
+          --description "CommitSHA-${{ github.sha }}"
+      - name: Deploy new app version
+        run: |
+          aws elasticbeanstalk update-environment \
+          --environment-name ${{ env.EB_ENVIRONMENT_NAME }} \
+          --version-label "Ver-${{ github.sha }}" 
+  
