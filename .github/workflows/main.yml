@@ -1,9 +1,9 @@
 name: HW_019_pipeline_to_AWS
 
 env:
-  EB_PACKAGE_S3_BUCKET_NAME: "second-try-bucket"
-  EB_APPLICATION_NAME: "CICI-HW"
-  EB_ENVIRONMENT_NAME: "Cicihw-env"
+  EB_PACKAGE_S3_BUCKET_NAME: "cicd-hw-bucket"
+  EB_APPLICATION_NAME: "CICD_HW"
+  EB_ENVIRONMENT_NAME: "Cicdhw-env"
   DEPLOY_PACKAGE_NAME: "flask_app_019_${{ github.sha }}.zip"
   AWS_REGION_NAME: "eu-central-1"
 
